@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>FS Proof of concept</title>
+<script src="https://unpkg.com/react@16/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@16/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/babel-standalone@6.15.0/babel.min.js"></script>
+<script src="xpath.js"></script>
+<style>
+body {
+  background-color: #171717;
+}
+
+#container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center; /* Центрирование карточек по горизонтали */
+  align-items: flex-start; /* Выравнивание карточек по верхнему краю */
+  margin-top: 50px; /* Отступ сверху, если нужно */
+  padding: 0 20px; /* Горизонтальные отступы, если нужно */
+}
+
+.card:hover {
+  transform: scale(1.05);
+  box-shadow: 0px 0px 10px #666;
+}
+
+.loader {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 8px solid #fff;
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+  position: fixed;
+  top: 47%;
+  left: 47%;
+  transform: translate(-50%, -50%);
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+var resizeTimeout;
+
+window.onresize = function() {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(function() {
+  var desiredWidth = 800;
+  var desiredHeight = 600;
+  window.resizeTo(desiredWidth, desiredHeight);
+  }, 500);
+};
+
+document.addEventListener('contextmenu', function(event) {
+  event.preventDefault();
+});
+
+document.addEventListener('keydown', function(event) {
+  if ((event.ctrlKey || event.metaKey) && event.shiftKey) {
+    event.preventDefault();
+  }
+});
+class Square extends React.Component {
+render() {
+var squareStyle = {
+height: 270,
+width: 180,
+backgroundSize: 'cover',
+backgroundImage: `url(${this.props.imageURL})`,
+backgroundPosition: 'center'
+};
+return (
+<div style={squareStyle}>
+</div>
+);
+}
+}
+class Label extends React.Component {
+render() {
+var labelContainerStyle = {
+display: 'flex',
+alignItems: 'center',
+justifyContent: 'center',
+textAlign: 'center'
+};    
+
+var labelStyle = {
+fontFamily: "system-ui",
+fontSize: "small",
+color: '#FFF',
+padding: 5,
+margin: 0,
+overflow: 'hidden',
+whiteSpace: 'normal',
+textOverflow: 'ellipsis',
+maxWidth: '100%'
+};
+
+var imageTitle = this.props.imageTitle;
+    if (imageTitle.length > 45) {
+      imageTitle = imageTitle.substring(0, 45);
+      var lastSpaceIndex = imageTitle.lastIndexOf(" ");
+      if (lastSpaceIndex !== -1) {
+        imageTitle = imageTitle.substring(0, lastSpaceIndex);
+      }
+      imageTitle += '...';
+    }
+
+return (
+<div style={labelContainerStyle}>
+    <p style={labelStyle}>{imageTitle}</p>
+</div>
+);
+}
+}
+class Card extends React.Component {
+handleClick = () => {
+    window.location.href = this.props.cardURL;
+  };
+
+render() {
+var cardStyle = {
+height: 315,
+width: 180,
+padding: 0,
+margin: 10,
+backgroundColor: "#171717",
+boxShadow: "0px 0px 5px #666",
+transition: "transform 0.3s, box-shadow 0.3s",
+cursor: "default"
+};
+return (
+<div style={cardStyle} className="card" onClick={this.handleClick}>
+<Square imageURL={this.props.imageURL} />
+<Label imageTitle={this.props.imageTitle} />
+</div>
+);
+}
+}
+
+function parseJSONAndCreateCards(jsonString, startIndex = 0) {
+  try { 
+    const data = JSON.parse(jsonString);
+
+    if (!Array.isArray(data)) {
+      console.error('Invalid JSON format. Expected an array.');
+      return null;
+    }
+
+    const cards = data.map((item, index) => (
+      <Card
+        key={startIndex + index}
+        imageURL={item.imageURL}
+        imageTitle={item.imageTitle}
+        cardURL={item.cardURL}
+      />
+    ));
+
+    return cards;
+  } catch (error) {
+    console.error('Failed to parse JSON:', error);
+    return null;
+  }
+}
+
+class App extends React.Component {
+    constructor(props) {
+      super(props);
+      this.state = {
+        loading: true,
+        cards: []
+      };
+    }
+
+    fetchData() {
+    if (this.state.loading) {
+      const url = 'https://ex-fs.net/films/';
+
+      const xpathAttributesMap = {
+      '//*[@id="dle-content"]/div[*]/div[1]/a/img': {
+      title: removeDuplicateParts,
+      src: extractUrlFromUri
+      },
+      '//*[@id="dle-content"]/div[*]/div[1]/a': {
+        href: nullHandler
+      }
+      };
+
+    const resultFormat = [
+    { key: "imageURL", xpath: '//*[@id="dle-content"]/div[*]/div[1]/a/img', attribute: "src" },
+    { key: "imageTitle", xpath: '//*[@id="dle-content"]/div[*]/div[1]/a/img', attribute: "title" },
+    { key: "cardURL", xpath: '//*[@id="dle-content"]/div[*]/div[1]/a', attribute: "href" }
+    ];
+      extractElementsByXPath(url, xpathAttributesMap, resultFormat)
+      .then(response => {
+      console.log(JSON.stringify(response));
+      this.setState((prevState) => {
+          const startIndex = prevState ? prevState.cards.length : 0;
+          const newCards = parseJSONAndCreateCards(JSON.stringify(response), startIndex);
+          if (newCards) {
+              if (prevState) {
+                  return {
+                         loading: false,
+                         cards: prevState.cards.concat(newCards),
+                        };
+                } else {
+                  return {
+                          loading: false,
+                          cards: newCards,
+                         };
+                }
+           }
+        });
+    }).catch(error => {
+    console.error(error);
+      });
+    }
+    }
+    
+    componentDidMount () {
+      this.fetchData();
+}
+    componentDidUpdate(prevProps) {
+    if (prevProps.loading !== this.props.loading) {
+    if (!this.props.loading) {
+      this.fetchData();
+    } else {
+      this.setState({ loading: true }); //, cards: []
+    }
+  }
+}
+
+    render() {
+      return (
+        <div>
+          {this.state.loading ? (
+            <div className="loader">
+            </div>
+          ) : (
+            <div id="container">
+              {this.state.cards}
+            </div>
+          )}
+        </div>
+      );
+    }
+  }
+
+function updateLoadingState(loading) {
+  const appRoot = document.querySelector("#root");
+  ReactDOM.render(<App loading={loading} />, appRoot);
+}
+updateLoadingState(true);
+</script>
+</body>
+</html>
